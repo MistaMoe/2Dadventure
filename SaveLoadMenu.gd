@@ -1,31 +1,38 @@
-# SaveLoadMenu.gd - Singleton Version
+# SaveLoadMenu.gd - For use with SaveLoadMenu.tscn
 extends Control
 
-# UI nodes - will be created dynamically
-var save_button: Button
-var load_button: Button
-var resume_button: Button
-var save_panel: Control
-var load_panel: Control
-var save_slots_container: VBoxContainer
-var load_slots_container: VBoxContainer
-var save_back_button: Button
-var load_back_button: Button
-var save_title: Label
-var load_title: Label
+# UI nodes - assign these in the editor or find them by name
+@onready var save_button: Button = $MainContainer/SaveButton
+@onready var load_button: Button = $MainContainer/LoadButton  
+@onready var resume_button: Button = $MainContainer/ResumeButton
+@onready var save_panel: Control = $SavePanel
+@onready var load_panel: Control = $LoadPanel
+@onready var save_slots_container: VBoxContainer = $SavePanel/SaveContainer/SaveSlotsContainer
+@onready var load_slots_container: VBoxContainer = $LoadPanel/LoadContainer/LoadSlotsContainer
+@onready var save_back_button: Button = $SavePanel/SaveContainer/SaveBackButton
+@onready var load_back_button: Button = $LoadPanel/LoadContainer/LoadBackButton
 
 var scene_manager: Node2D
 var save_slots: Array[Button] = []
 var load_slots: Array[Button] = []
 
 func _ready():
-	# Set up the singleton UI
-	setup_ui()
-	
 	# Find the scene manager
-	scene_manager = get_node("/root/SceneManager")
+	scene_manager = get_node_or_null("/root/SceneManager")
 	if not scene_manager:
 		print("Warning: SceneManager not found!")
+	
+	# Connect button signals
+	if save_button:
+		save_button.pressed.connect(_on_save_button_pressed)
+	if load_button:
+		load_button.pressed.connect(_on_load_button_pressed)
+	if resume_button:
+		resume_button.pressed.connect(_on_resume_button_pressed)
+	if save_back_button:
+		save_back_button.pressed.connect(_on_save_back_button_pressed)
+	if load_back_button:
+		load_back_button.pressed.connect(_on_load_back_button_pressed)
 	
 	# Setup save/load slots
 	setup_save_slots()
@@ -33,121 +40,16 @@ func _ready():
 	
 	# Start with menu hidden
 	hide_all_panels()
-
-func setup_ui():
-	# Set up this Control as a full-screen overlay
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	
-	# Create a semi-transparent background
-	var background = ColorRect.new()
-	background.color = Color(0, 0, 0, 0.7)
-	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(background)
-	
-	# Create main container
-	var main_container = VBoxContainer.new()
-	main_container.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	main_container.custom_minimum_size = Vector2(300, 400)
-	add_child(main_container)
-	
-	# Title
-	var title = Label.new()
-	title.text = "Game Menu"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 24)
-	main_container.add_child(title)
-	
-	# Add some spacing
-	var spacer1 = Control.new()
-	spacer1.custom_minimum_size = Vector2(0, 20)
-	main_container.add_child(spacer1)
-	
-	# Main menu buttons
-	resume_button = Button.new()
-	resume_button.text = "Resume"
-	resume_button.custom_minimum_size = Vector2(200, 40)
-	resume_button.pressed.connect(_on_resume_button_pressed)
-	main_container.add_child(resume_button)
-	
-	save_button = Button.new()
-	save_button.text = "Save Game"
-	save_button.custom_minimum_size = Vector2(200, 40)
-	save_button.pressed.connect(_on_save_button_pressed)
-	main_container.add_child(save_button)
-	
-	load_button = Button.new()
-	load_button.text = "Load Game"
-	load_button.custom_minimum_size = Vector2(200, 40)
-	load_button.pressed.connect(_on_load_button_pressed)
-	main_container.add_child(load_button)
-	
-	# Save Panel
-	save_panel = Control.new()
-	save_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	save_panel.visible = false
-	add_child(save_panel)
-	
-	var save_container = VBoxContainer.new()
-	save_container.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	save_container.custom_minimum_size = Vector2(300, 400)
-	save_panel.add_child(save_container)
-	
-	save_title = Label.new()
-	save_title.text = "Save Game"
-	save_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	save_title.add_theme_font_size_override("font_size", 20)
-	save_container.add_child(save_title)
-	
-	save_slots_container = VBoxContainer.new()
-	save_container.add_child(save_slots_container)
-	
-	save_back_button = Button.new()
-	save_back_button.text = "Back"
-	save_back_button.custom_minimum_size = Vector2(200, 40)
-	save_back_button.pressed.connect(_on_save_back_button_pressed)
-	save_container.add_child(save_back_button)
-	
-	# Load Panel
-	load_panel = Control.new()
-	load_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	load_panel.visible = false
-	add_child(load_panel)
-	
-	var load_container = VBoxContainer.new()
-	load_container.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	load_container.custom_minimum_size = Vector2(300, 400)
-	load_panel.add_child(load_container)
-	
-	load_title = Label.new()
-	load_title.text = "Load Game"
-	load_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	load_title.add_theme_font_size_override("font_size", 20)
-	load_container.add_child(load_title)
-	
-	load_slots_container = VBoxContainer.new()
-	load_container.add_child(load_slots_container)
-	
-	load_back_button = Button.new()
-	load_back_button.text = "Back"
-	load_back_button.custom_minimum_size = Vector2(200, 40)
-	load_back_button.pressed.connect(_on_load_back_button_pressed)
-	load_container.add_child(load_back_button)
-
-func hide_all_panels():
-	if save_panel:
-		save_panel.visible = false
-	if load_panel:
-		load_panel.visible = false
-	if save_button:
-		save_button.visible = false
-	if load_button:
-		load_button.visible = false
-	if resume_button:
-		resume_button.visible = false
+	visible = false
 
 func setup_save_slots():
 	if not save_slots_container:
 		return
+		
+	# Clear existing slots
+	for child in save_slots_container.get_children():
+		child.queue_free()
+	save_slots.clear()
 		
 	# Create save slot buttons
 	for i in range(3):  # 3 save slots
@@ -162,6 +64,11 @@ func setup_load_slots():
 	if not load_slots_container:
 		return
 		
+	# Clear existing slots
+	for child in load_slots_container.get_children():
+		child.queue_free()  
+	load_slots.clear()
+		
 	# Create load slot buttons
 	for i in range(3):  # 3 save slots
 		var slot_button = Button.new()
@@ -171,8 +78,16 @@ func setup_load_slots():
 		load_slots_container.add_child(slot_button)
 		load_slots.append(slot_button)
 
+func hide_all_panels():
+	if save_panel:
+		save_panel.visible = false
+	if load_panel:
+		load_panel.visible = false
+	show_main_menu()
+
 func show_menu():
 	"""Called by scene manager to show the menu"""
+	visible = true
 	show_main_menu()
 
 func show_main_menu():

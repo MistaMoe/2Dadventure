@@ -1,4 +1,4 @@
-# scene_manager.gd
+# scene_manager.gd - Updated for scene-based menu
 extends Node2D
 
 # Core game state
@@ -10,152 +10,42 @@ var current_scene_path: String = ""
 
 # UI reference
 var save_load_menu: Control
+var save_load_menu_scene = preload("res://Scenes/SaveLoadMenu/SaveLoadMenu.tscn")  # Adjust path as needed
 
 func _ready():
 	current_scene_path = get_tree().current_scene.scene_file_path
-	# Add multiple frames delay to ensure the scene is fully loaded
-	await get_tree().process_frame
-	await get_tree().process_frame
-	call_deferred("setup_ui_and_restore")
-
-func setup_ui_and_restore():
-	# Clear previous menu reference to ensure fresh state
-	save_load_menu = null
-	# Try to find the menu multiple times with delays
-	await find_save_load_menu_with_retry()
+	# Set up the save/load menu reference
+	setup_save_load_menu()
 	# Ensure game is unpaused and menu is hidden when entering new scene
 	get_tree().paused = false
-	restore_scene_state()
+	# Wait a frame then restore scene state
+	call_deferred("restore_scene_state")
 
-func find_save_load_menu_with_retry():
-	# First try to get the singleton SaveLoadMenu
-	if has_node("/root/SaveLoadMenu"):
-		save_load_menu = get_node("/root/SaveLoadMenu")
-		print("Found SaveLoadMenu singleton")
-		configure_save_load_menu()
-		return
+func setup_save_load_menu():
+	# Create menu instance if it doesn't exist
+	if not save_load_menu or not is_instance_valid(save_load_menu):
+		save_load_menu = save_load_menu_scene.instantiate()
+		
+		# Add to a CanvasLayer so it appears on top
+		var canvas_layer = CanvasLayer.new()
+		canvas_layer.layer = 100
+		get_tree().root.add_child(canvas_layer)
+		canvas_layer.add_child(save_load_menu)
+		
+		print("Created SaveLoadMenu instance")
 	
-	# If no singleton, try to find in current scene up to 5 times with small delays
-	for attempt in range(5):
-		find_save_load_menu()
-		if save_load_menu:
-			return
-		print("SaveLoadMenu search attempt ", attempt + 1, " failed, retrying...")
-		await get_tree().process_frame
-
-func find_save_load_menu():
-	# More comprehensive search with debug output
-	var current_scene = get_tree().current_scene
-	print("Searching for SaveLoadMenu in scene: ", current_scene.name)
-	
-	# First, try direct paths
-	var direct_paths = [
-		"SaveLoadMenu", 
-		"CanvasLayer/SaveLoadMenu", 
-		"UI/SaveLoadMenu",
-		"GUI/SaveLoadMenu",
-		"HUD/SaveLoadMenu"
-	]
-	
-	for path in direct_paths:
-		save_load_menu = current_scene.get_node_or_null(path)
-		if save_load_menu:
-			print("Found SaveLoadMenu at: ", path)
-			configure_save_load_menu()
-			return
-	
-	# Try finding by class name if it extends Control
-	var all_controls = []
-	get_all_controls(current_scene, all_controls)
-	
-	for control in all_controls:
-		if control.get_script() and control.get_script().get_path().ends_with("SaveLoadMenu.gd"):
-			save_load_menu = control
-			print("Found SaveLoadMenu by script: ", control.get_path())
-			configure_save_load_menu()
-			return
-	
-	# Fallback: comprehensive recursive search
-	save_load_menu = find_node_by_name_recursive(current_scene, "SaveLoadMenu")
-	if save_load_menu:
-		print("Found SaveLoadMenu via recursive search")
-		configure_save_load_menu()
-		return
-	
-	# Last resort: find any node with SaveLoadMenu in the name
-	save_load_menu = current_scene.find_child("SaveLoadMenu", true, false)
-	if save_load_menu:
-		print("Found SaveLoadMenu via find_child")
-		configure_save_load_menu()
-		return
-	
-	print("SaveLoadMenu not found in scene: ", current_scene.name)
-	save_load_menu = null
-
-func get_all_controls(node: Node, controls_array: Array):
-	if node is Control:
-		controls_array.append(node)
-	
-	for child in node.get_children():
-		get_all_controls(child, controls_array)
-
-func find_node_by_name_recursive(node: Node, target_name: String) -> Node:
-	if node.name == target_name:
-		return node
-	
-	for child in node.get_children():
-		var result = find_node_by_name_recursive(child, target_name)
-		if result:
-			return result
-	
-	return null
-
-func configure_save_load_menu():
-	# Ensure the node is valid before configuring
-	if not is_instance_valid(save_load_menu):
-		save_load_menu = null
-		return
-	
-	print("Configuring SaveLoadMenu: ", save_load_menu.get_path())
-	
-	# First, ensure the menu is completely hidden and reset
+	# Ensure it's hidden
 	save_load_menu.visible = false
-	save_load_menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	
-	# Make sure all panels are hidden
-	if save_load_menu.has_method("hide_all_panels"):
-		save_load_menu.hide_all_panels()
-	
-	# Ensure it's on top
-	var parent = save_load_menu.get_parent()
-	if parent is CanvasLayer:
-		parent.layer = 100
-	elif parent is Control:
-		parent.move_child(save_load_menu, parent.get_child_count() - 1)
-	
-	print("SaveLoadMenu configured and hidden at: ", save_load_menu.get_path())
 
 func _input(event):
-	if event.is_action_pressed("ui_cancel"):
-		# Always try to find the menu if we don't have a valid reference
-		if not save_load_menu or not is_instance_valid(save_load_menu):
-			print("Menu reference lost, trying to find it again...")
-			find_save_load_menu()
-		
-		if save_load_menu and is_instance_valid(save_load_menu):
-			toggle_save_load_menu()
-		else:
-			print("Cannot toggle menu - SaveLoadMenu not found or invalid")
+	if event.is_action_pressed("ui_cancel"):  # ESC key
+		toggle_save_load_menu()
 
 func toggle_save_load_menu():
 	if not save_load_menu or not is_instance_valid(save_load_menu):
-		print("Cannot toggle - invalid menu reference")
+		print("SaveLoadMenu not available")
+		setup_save_load_menu()  # Try to create it again
 		return
-	
-	print("Toggling menu visibility. Current state: ", save_load_menu.visible)
-	print("Menu parent: ", save_load_menu.get_parent())
-	print("Menu position: ", save_load_menu.position)
-	print("Menu size: ", save_load_menu.size)
 	
 	if save_load_menu.visible:
 		hide_save_load_menu()
@@ -168,12 +58,14 @@ func show_save_load_menu():
 		return
 	
 	print("Showing SaveLoadMenu")
-	save_load_menu.visible = true
 	
-	# Call show_menu() only when actually showing the menu
+	# Show the menu using its show_menu method
 	if save_load_menu.has_method("show_menu"):
 		save_load_menu.show_menu()
+	else:
+		save_load_menu.visible = true
 	
+	# Pause the game
 	get_tree().paused = true
 
 func hide_save_load_menu():
@@ -384,24 +276,12 @@ func change_scene(scene_path: String, spawn_pos: Vector2):
 	save_current_scene_state()
 	player_spawn_position = spawn_pos
 	
-	# Clear the menu reference since it will be destroyed with the scene
-	save_load_menu = null
-	
-	# DEFER the scene change to avoid physics callback issues
-	call_deferred("_deferred_scene_change", scene_path)
-
-func _deferred_scene_change(scene_path: String):
 	# Change scene and wait for it to complete
 	get_tree().change_scene_to_file(scene_path)
 	
-	# Wait for the scene change to complete, then find the menu
-	await get_tree().process_frame
-	await get_tree().process_frame # Extra frame to ensure everything is ready
-	
-	# Manually find and setup the menu in the new scene
-	await find_save_load_menu_with_retry()
-# Save/Load data functions
+	# The new scene will automatically call setup in its _ready
 
+# Save/Load data functions
 func get_current_save_data() -> Dictionary:
 	save_current_scene_state()
 	return {

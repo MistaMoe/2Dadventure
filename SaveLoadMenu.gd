@@ -1,13 +1,13 @@
 # SaveLoadMenu.gd - Simplified Autoload Version
 extends Node # Change from Control to Node since this is an autoload
 
-# Reference to the actual menu scene
-var menu_scene: Control = null
-
 signal save_requested(slot_id: int)
 signal load_requested(slot_id: int)
 signal menu_opened
 signal menu_closed
+
+# Reference to the actual menu scene
+var menu_scene: Control = null
 
 # Panel references
 var main_menu_panel: Control
@@ -19,32 +19,48 @@ const SAVE_DIR = "user://saves/"
 const SAVE_FORMAT = "save_{0}.save"
 const MAX_SAVE_SLOTS = 3
 
-# Preload the menu scene
-const MenuScene = preload("res://Scenes/SaveLoadMenu/SaveLoadMenu.tscn")
+# Track if we're fully initialized
+var _is_ready = false
 
 func _ready():
-	# Create the menu instance
-	menu_scene = MenuScene.instantiate()
+	print("SaveLoadMenu AutoLoad script starting...") # Debug print
+	
+	# Load and instance the menu scene
+	var scene = load("res://Scenes/SaveLoadMenu/SaveLoadMenu.tscn")
+	if not scene:
+		push_error("Failed to load SaveLoadMenu scene!")
+		return
+		
+	menu_scene = scene.instantiate()
+	if not menu_scene:
+		push_error("Failed to instantiate SaveLoadMenu scene!")
+		return
 	
 	# Make it process even when paused
 	menu_scene.process_mode = Node.PROCESS_MODE_ALWAYS
 	
-	# Find panels by name after adding to tree
+	# Find panels by name
 	main_menu_panel = menu_scene.get_node("VBoxContainer/MainMenuPanel")
 	save_panel = menu_scene.get_node("VBoxContainer/SavePanel")
 	load_panel = menu_scene.get_node("VBoxContainer/LoadPanel")
 	
 	if not main_menu_panel or not save_panel or not load_panel:
 		push_error("SaveLoadMenu: Required panels not found!")
+		print("Panels found: ", main_menu_panel != null, save_panel != null, load_panel != null)
 		return
 	
-	# Initially hide the menu
+	# Make sure menu starts hidden and unpaused
 	menu_scene.hide()
+	menu_scene.visible = false
+	get_tree().paused = false
 	
-	# Add the menu to the root viewport
-	var root = get_tree().root
-	root.add_child(menu_scene)
+	# Add the menu to the root viewport using call_deferred
+	get_tree().root.call_deferred("add_child", menu_scene)
 	
+	# Setup menu after it's added to the tree
+	call_deferred("_setup_menu")
+
+func _setup_menu():
 	# Connect buttons
 	connect_buttons()
 	
@@ -53,25 +69,47 @@ func _ready():
 	
 	# Create save slots
 	setup_save_slots()
+	
+	# Hide all panels initially
+	main_menu_panel.hide()
+	save_panel.hide()
+	load_panel.hide()
+	
+	# Mark as ready for input
+	_is_ready = true
+	
+	print("Menu setup complete") # Debug print
 
 func _unhandled_input(event):
+	if not _is_ready:
+		return
+		
 	if event.is_action_pressed("ui_cancel"):  # ESC key
 		toggle_menu()
 		get_viewport().set_input_as_handled()
 
 func toggle_menu():
+	if not _is_ready or not menu_scene:
+		return
+		
 	if menu_scene.visible:
 		hide_menu()
 	else:
 		show_menu()
 
 func show_menu():
+	if not _is_ready or not menu_scene:
+		return
+		
 	menu_scene.show()
 	show_main_panel()
 	get_tree().paused = true
 	emit_signal("menu_opened")
 
 func hide_menu():
+	if not _is_ready or not menu_scene:
+		return
+		
 	menu_scene.hide()
 	get_tree().paused = false
 	emit_signal("menu_closed")
@@ -115,26 +153,21 @@ func connect_buttons():
 	if resume_button:
 		resume_button.pressed.connect(hide_menu)
 	
-	# Connect back buttons
-	var save_slots_container = save_panel.get_node("SaveSlotsContainer")
-	var load_slots_container = load_panel.get_node("LoadSlotsContainer")
+	# Connect back buttons - now looking for buttons directly under the panels
+	var save_back = save_panel.get_node("SaveBackButton")
+	var load_back = load_panel.get_node("LoadBackButton")
 	
-	if save_slots_container:
-		var save_back = save_slots_container.get_node("SaveBackButton")
-		if save_back:
-			save_back.pressed.connect(show_main_panel)
-			
-	if load_slots_container:
-		var load_back = load_slots_container.get_node("LoadBackButton")
-		if load_back:
-			load_back.pressed.connect(show_main_panel)
-
+	if save_back:
+		save_back.pressed.connect(show_main_panel)
+	if load_back:
+		load_back.pressed.connect(show_main_panel)
+		
 func setup_save_slots():
 	if not save_panel or not load_panel:
 		return
 		
-	var save_slots = save_panel.get_node("SaveSlotsContainer")
-	var load_slots = load_panel.get_node("LoadSlotsContainer")
+	var save_slots = save_panel.get_node("SaveSlotsContainer")  # Removed VBoxContainer from path
+	var load_slots = load_panel.get_node("LoadSlotsContainer")  # Removed VBoxContainer from path
 	
 	if not save_slots or not load_slots:
 		return
@@ -157,7 +190,7 @@ func update_save_slots():
 	if not save_panel:
 		return
 		
-	var save_slots = save_panel.get_node("SaveSlotsContainer").get_children()
+	var save_slots = save_panel.get_node("SaveSlotsContainer").get_children()  # Removed VBoxContainer from path
 	for i in range(MAX_SAVE_SLOTS):
 		var slot_info = get_save_slot_info(i)
 		if i < save_slots.size() and save_slots[i] is Button:
@@ -167,13 +200,14 @@ func update_load_slots():
 	if not load_panel:
 		return
 		
-	var load_slots = load_panel.get_node("LoadSlotsContainer").get_children()
+	var load_slots = load_panel.get_node("LoadSlotsContainer").get_children()  # Removed VBoxContainer from path
 	for i in range(MAX_SAVE_SLOTS):
 		var slot_info = get_save_slot_info(i)
 		if i < load_slots.size() and load_slots[i] is Button:
 			var button = load_slots[i]
 			button.text = "Load Slot " + str(i + 1) + "\n" + slot_info
 			button.disabled = not save_exists(i)
+
 
 func get_save_slot_info(slot_id: int) -> String:
 	var save_path = SAVE_DIR + SAVE_FORMAT.format([slot_id])

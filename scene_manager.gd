@@ -26,17 +26,20 @@ func setup_save_load_menu():
 	if not save_load_menu or not is_instance_valid(save_load_menu):
 		save_load_menu = save_load_menu_scene.instantiate()
 		
-		# Add to a CanvasLayer so it appears on top
-		var canvas_layer = CanvasLayer.new()
-		canvas_layer.layer = 100
-		get_tree().root.add_child(canvas_layer)
-		canvas_layer.add_child(save_load_menu)
+		# Set process mode to handle input while paused
+		save_load_menu.process_mode = Node.PROCESS_MODE_ALWAYS
+		
+		# Add directly to the root (simpler approach)
+		get_tree().root.add_child(save_load_menu)
+		
+		# Ensure it covers the full screen
+		save_load_menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		
 		print("Created SaveLoadMenu instance")
 	
 	# Ensure it's hidden
 	save_load_menu.visible = false
-
+	
 func _input(event):
 	if event.is_action_pressed("ui_cancel"):  # ESC key
 		toggle_save_load_menu()
@@ -58,15 +61,13 @@ func show_save_load_menu():
 		return
 	
 	print("Showing SaveLoadMenu")
+	get_tree().paused = true  # Pause first
 	
-	# Show the menu using its show_menu method
+	# Show the menu
 	if save_load_menu.has_method("show_menu"):
 		save_load_menu.show_menu()
-	else:
-		save_load_menu.visible = true
-	
-	# Pause the game
-	get_tree().paused = true
+	save_load_menu.visible = true
+	print("Menu visibility:", save_load_menu.visible)  # Debug print
 
 func hide_save_load_menu():
 	if not save_load_menu:
@@ -75,7 +76,7 @@ func hide_save_load_menu():
 	
 	print("Hiding SaveLoadMenu")
 	save_load_menu.visible = false
-	get_tree().paused = false
+	get_tree().paused = false  # Unpause after hiding
 
 # Unified player finding function
 func find_player() -> Node:
@@ -280,7 +281,7 @@ func change_scene(scene_path: String, spawn_pos: Vector2):
 	get_tree().change_scene_to_file(scene_path)
 	
 	# The new scene will automatically call setup in its _ready
-
+	
 # Save/Load data functions
 func get_current_save_data() -> Dictionary:
 	save_current_scene_state()

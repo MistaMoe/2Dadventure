@@ -1,11 +1,15 @@
 # SaveLoadMenu.gd - Simplified Autoload Version
+extends Node # Change from Control to Node since this is an autoload
+
+# Reference to the actual menu scene
+var menu_scene: Control = null
 
 signal save_requested(slot_id: int)
 signal load_requested(slot_id: int)
 signal menu_opened
 signal menu_closed
 
-# Panel references - using variables instead of onready
+# Panel references
 var main_menu_panel: Control
 var save_panel: Control
 var load_panel: Control
@@ -15,24 +19,31 @@ const SAVE_DIR = "user://saves/"
 const SAVE_FORMAT = "save_{0}.save"
 const MAX_SAVE_SLOTS = 3
 
+# Preload the menu scene
+const MenuScene = preload("res://Scenes/SaveLoadMenu/SaveLoadMenu.tscn")
+
 func _ready():
-	# Wait a frame to ensure all nodes are ready
-	await get_tree().process_frame
+	# Create the menu instance
+	menu_scene = MenuScene.instantiate()
 	
-	# Find panels by name
-	main_menu_panel = find_child("MainMenuPanel")
-	save_panel = find_child("SavePanel")
-	load_panel = find_child("LoadPanel")
+	# Make it process even when paused
+	menu_scene.process_mode = Node.PROCESS_MODE_ALWAYS
+	
+	# Find panels by name after adding to tree
+	main_menu_panel = menu_scene.get_node("VBoxContainer/MainMenuPanel")
+	save_panel = menu_scene.get_node("VBoxContainer/SavePanel")
+	load_panel = menu_scene.get_node("VBoxContainer/LoadPanel")
 	
 	if not main_menu_panel or not save_panel or not load_panel:
 		push_error("SaveLoadMenu: Required panels not found!")
 		return
 	
-	# Make sure we process even when game is paused
-	process_mode = Node.PROCESS_MODE_ALWAYS
-	
 	# Initially hide the menu
-	hide()
+	menu_scene.hide()
+	
+	# Add the menu to the root viewport
+	var root = get_tree().root
+	root.add_child(menu_scene)
 	
 	# Connect buttons
 	connect_buttons()
@@ -49,56 +60,21 @@ func _unhandled_input(event):
 		get_viewport().set_input_as_handled()
 
 func toggle_menu():
-	if visible:
+	if menu_scene.visible:
 		hide_menu()
 	else:
 		show_menu()
 
 func show_menu():
-	show()
+	menu_scene.show()
 	show_main_panel()
-	# This will pause EVERYTHING except nodes with PROCESS_MODE_ALWAYS
 	get_tree().paused = true
 	emit_signal("menu_opened")
 
 func hide_menu():
-	hide()
+	menu_scene.hide()
 	get_tree().paused = false
 	emit_signal("menu_closed")
-
-func connect_buttons():
-	if not main_menu_panel or not save_panel or not load_panel:
-		return
-		
-	# Connect main menu buttons
-	var save_button = main_menu_panel.find_child("SaveButton")
-	var load_button = main_menu_panel.find_child("LoadButton")
-	var resume_button = main_menu_panel.find_child("ResumeButton")
-	
-	if save_button:
-		save_button.pressed.connect(show_save_panel)
-	if load_button:
-		load_button.pressed.connect(show_load_panel)
-	if resume_button:
-		resume_button.pressed.connect(hide_menu)
-	
-	# Connect back buttons
-	var save_slots_container = save_panel.find_child("SaveSlotsContainer")
-	var load_slots_container = load_panel.find_child("LoadSlotsContainer")
-	
-	if save_slots_container:
-		var save_back = save_slots_container.find_child("SaveBackButton")
-		if save_back:
-			save_back.pressed.connect(show_main_panel)
-			
-	if load_slots_container:
-		var load_back = load_slots_container.find_child("LoadBackButton")
-		if load_back:
-			load_back.pressed.connect(show_main_panel)
-
-func _input(event):
-	if event.is_action_pressed("ui_cancel"):  # ESC key
-		toggle_menu()
 
 func show_main_panel():
 	if not main_menu_panel or not save_panel or not load_panel:
@@ -123,12 +99,42 @@ func show_load_panel():
 	load_panel.show()
 	update_load_slots()
 
+func connect_buttons():
+	if not main_menu_panel or not save_panel or not load_panel:
+		return
+		
+	# Connect main menu buttons
+	var save_button = main_menu_panel.get_node("SaveButton")
+	var load_button = main_menu_panel.get_node("LoadButton")
+	var resume_button = main_menu_panel.get_node("ResumeButton")
+	
+	if save_button:
+		save_button.pressed.connect(show_save_panel)
+	if load_button:
+		load_button.pressed.connect(show_load_panel)
+	if resume_button:
+		resume_button.pressed.connect(hide_menu)
+	
+	# Connect back buttons
+	var save_slots_container = save_panel.get_node("SaveSlotsContainer")
+	var load_slots_container = load_panel.get_node("LoadSlotsContainer")
+	
+	if save_slots_container:
+		var save_back = save_slots_container.get_node("SaveBackButton")
+		if save_back:
+			save_back.pressed.connect(show_main_panel)
+			
+	if load_slots_container:
+		var load_back = load_slots_container.get_node("LoadBackButton")
+		if load_back:
+			load_back.pressed.connect(show_main_panel)
+
 func setup_save_slots():
 	if not save_panel or not load_panel:
 		return
 		
-	var save_slots = save_panel.find_child("SaveSlotsContainer")
-	var load_slots = load_panel.find_child("LoadSlotsContainer")
+	var save_slots = save_panel.get_node("SaveSlotsContainer")
+	var load_slots = load_panel.get_node("LoadSlotsContainer")
 	
 	if not save_slots or not load_slots:
 		return
@@ -151,11 +157,7 @@ func update_save_slots():
 	if not save_panel:
 		return
 		
-	var save_slots_container = save_panel.find_child("SaveSlotsContainer")
-	if not save_slots_container:
-		return
-		
-	var save_slots = save_slots_container.get_children()
+	var save_slots = save_panel.get_node("SaveSlotsContainer").get_children()
 	for i in range(MAX_SAVE_SLOTS):
 		var slot_info = get_save_slot_info(i)
 		if i < save_slots.size() and save_slots[i] is Button:
@@ -165,11 +167,7 @@ func update_load_slots():
 	if not load_panel:
 		return
 		
-	var load_slots_container = load_panel.find_child("LoadSlotsContainer")
-	if not load_slots_container:
-		return
-		
-	var load_slots = load_slots_container.get_children()
+	var load_slots = load_panel.get_node("LoadSlotsContainer").get_children()
 	for i in range(MAX_SAVE_SLOTS):
 		var slot_info = get_save_slot_info(i)
 		if i < load_slots.size() and load_slots[i] is Button:
@@ -209,7 +207,7 @@ func save_exists(slot_id: int) -> bool:
 func _on_save_slot_pressed(slot_id: int):
 	emit_signal("save_requested", slot_id)
 	# Wait a frame to let the save complete
-	await Engine.get_main_loop().process_frame
+	await get_tree().process_frame
 	update_save_slots()
 	update_load_slots()
 	hide_menu()
